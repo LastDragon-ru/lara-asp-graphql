@@ -1,10 +1,9 @@
 <?php declare(strict_types = 1);
 
-namespace LastDragon_ru\LaraASP\GraphQL\SchemaPrinter;
+namespace LastDragon_ru\LaraASP\GraphQL\Printer;
 
 use Exception;
 use GraphQL\Language\Parser;
-use GraphQL\Type\Definition\Directive as GraphQLDirective;
 use GraphQL\Type\Definition\EnumType;
 use GraphQL\Type\Definition\InputObjectType;
 use GraphQL\Type\Definition\InterfaceType;
@@ -12,25 +11,26 @@ use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\StringType;
 use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Definition\UnionType;
-use LastDragon_ru\LaraASP\GraphQL\SchemaPrinter\Contracts\Settings;
-use LastDragon_ru\LaraASP\GraphQL\SchemaPrinter\Settings\DefaultSettings;
-use LastDragon_ru\LaraASP\GraphQL\SchemaPrinter\Settings\GraphQLSettings;
-use LastDragon_ru\LaraASP\GraphQL\Testing\GraphQLExpectedSchema;
-use LastDragon_ru\LaraASP\GraphQL\Testing\GraphQLExpectedType;
-use LastDragon_ru\LaraASP\GraphQL\Testing\Package\SchemaPrinter\TestSettings;
 use LastDragon_ru\LaraASP\GraphQL\Testing\Package\TestCase;
+use LastDragon_ru\LaraASP\GraphQLPrinter\Contracts\Printer;
+use LastDragon_ru\LaraASP\GraphQLPrinter\Contracts\Settings;
+use LastDragon_ru\LaraASP\GraphQLPrinter\Settings\DefaultSettings;
+use LastDragon_ru\LaraASP\GraphQLPrinter\Settings\GraphQLSettings;
+use LastDragon_ru\LaraASP\GraphQLPrinter\Testing\GraphQLExpectedSchema;
+use LastDragon_ru\LaraASP\GraphQLPrinter\Testing\GraphQLExpectedType;
+use LastDragon_ru\LaraASP\GraphQLPrinter\Testing\Package\TestSettings;
 use Nuwave\Lighthouse\Schema\DirectiveLocator;
 use Nuwave\Lighthouse\Schema\Directives\BaseDirective;
 use Nuwave\Lighthouse\Schema\TypeRegistry;
-use Nuwave\Lighthouse\Support\Contracts\Directive as LighthouseDirective;
 
+use function in_array;
 use function str_starts_with;
 
 /**
  * @internal
- * @covers \LastDragon_ru\LaraASP\GraphQL\SchemaPrinter\SchemaPrinter
+ * @covers \LastDragon_ru\LaraASP\GraphQLPrinter\Printer
  */
-class SchemaPrinterTest extends TestCase {
+class PrinterTest extends TestCase {
     // <editor-fold desc="Tests">
     // =========================================================================
     /**
@@ -137,7 +137,7 @@ class SchemaPrinterTest extends TestCase {
         $registry->register($codeInput);
 
         // Test
-        $printer = $this->app->make(SchemaPrinter::class)->setSettings($settings)->setLevel($level);
+        $printer = $this->app->make(Printer::class)->setSettings($settings)->setLevel($level);
         $schema  = $this->getGraphQLSchema($this->getTestData()->file('~printSchema-schema.graphql'));
         $actual  = $printer->printSchema($schema);
 
@@ -253,7 +253,7 @@ class SchemaPrinterTest extends TestCase {
         $registry->register($codeInput);
 
         // Test
-        $printer = $this->app->make(SchemaPrinter::class)->setSettings($settings)->setLevel($level);
+        $printer = $this->app->make(Printer::class)->setSettings($settings)->setLevel($level);
         $schema  = $this->getGraphQLSchema($this->getTestData()->file('~printSchemaType-schema.graphql'));
         $actual  = $printer->printSchemaType($schema, $type);
 
@@ -264,7 +264,7 @@ class SchemaPrinterTest extends TestCase {
      * @dataProvider dataProviderPrintType
      */
     public function testPrintType(GraphQLExpectedType $expected, ?Settings $settings, int $level, Type $type): void {
-        $printer = $this->app->make(SchemaPrinter::class)->setSettings($settings)->setLevel($level);
+        $printer = $this->app->make(Printer::class)->setSettings($settings)->setLevel($level);
         $actual  = $printer->printType($type);
 
         $this->assertGraphQLTypeEquals($expected, $actual);
@@ -280,7 +280,7 @@ class SchemaPrinterTest extends TestCase {
         return [
             'null'                                             => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-default-settings.graphql'),
+                    $this->getTestData()->file('~printSchema-DefaultSettings.graphql'),
                 ))
                     ->setUsedTypes([
                         'Query',
@@ -300,35 +300,15 @@ class SchemaPrinterTest extends TestCase {
                         'CodeType',
                         'CodeInterface',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Int',
-                        'Float',
-                        'SchemaEnumUnused',
-                        'SchemaInputUnused',
-                        'SchemaInterfaceUnused',
-                        'SchemaScalarUnused',
-                        'SchemaTypeUnused',
-                        'SchemaUnionUnused',
-                    ])
                     ->setUsedDirectives([
                         '@deprecated',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@scalar',
-                        '@mock',
-                        '@schemaDirective',
-                        '@schemaDirectiveUnused',
-                        '@codeDirective',
                     ]),
                 null,
                 0,
             ],
             DefaultSettings::class                             => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-default-settings.graphql'),
+                    $this->getTestData()->file('~printSchema-DefaultSettings.graphql'),
                 ))
                     ->setUsedTypes([
                         'Query',
@@ -348,35 +328,15 @@ class SchemaPrinterTest extends TestCase {
                         'CodeType',
                         'CodeInterface',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Int',
-                        'Float',
-                        'SchemaEnumUnused',
-                        'SchemaInputUnused',
-                        'SchemaInterfaceUnused',
-                        'SchemaScalarUnused',
-                        'SchemaTypeUnused',
-                        'SchemaUnionUnused',
-                    ])
                     ->setUsedDirectives([
                         '@deprecated',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@scalar',
-                        '@mock',
-                        '@schemaDirective',
-                        '@schemaDirectiveUnused',
-                        '@codeDirective',
                     ]),
                 new DefaultSettings(),
                 0,
             ],
             GraphQLSettings::class                             => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-graphql-settings.graphql'),
+                    $this->getTestData()->file('~printSchema-GraphQLSettings.graphql'),
                 ))
                     ->setUsedTypes([
                         'Query',
@@ -402,29 +362,15 @@ class SchemaPrinterTest extends TestCase {
                         'SchemaInterfaceUnused',
                         'SchemaUnionUnused',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Int',
-                        'Float',
-                    ])
                     ->setUsedDirectives([
                         '@deprecated',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@schemaDirective',
-                        '@schemaDirectiveUnused',
-                        '@codeDirective',
-                        '@mock',
-                        '@scalar',
                     ]),
                 new GraphQLSettings(),
                 0,
             ],
             TestSettings::class                                => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-test-settings.graphql'),
+                    $this->getTestData()->file('~printSchema-TestSettings.graphql'),
                 ))
                     ->setUsedTypes([
                         'Int',
@@ -449,34 +395,19 @@ class SchemaPrinterTest extends TestCase {
                         'CodeDirectiveScalarCustomClass',
                         'CodeInterface',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Float',
-                        'SchemaEnumUnused',
-                        'SchemaInputUnused',
-                        'SchemaInterfaceUnused',
-                        'SchemaScalarUnused',
-                        'SchemaTypeUnused',
-                        'SchemaUnionUnused',
-                    ])
                     ->setUsedDirectives([
                         '@schemaDirective',
                         '@codeDirective',
                         '@deprecated',
                         '@scalar',
                         '@mock',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@schemaDirectiveUnused',
                     ]),
                 new TestSettings(),
                 0,
             ],
             TestSettings::class.' (no directives definitions)' => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-test-settings-no-directives-definitions.graphql'),
+                    $this->getTestData()->file('~printSchema-TestSettings-NoDirectivesDefinitions.graphql'),
                 ))
                     ->setUsedTypes([
                         'Query',
@@ -496,28 +427,12 @@ class SchemaPrinterTest extends TestCase {
                         'CodeType',
                         'CodeInterface',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Int',
-                        'Float',
-                        'SchemaEnumUnused',
-                        'SchemaInputUnused',
-                        'SchemaInterfaceUnused',
-                        'SchemaScalarUnused',
-                        'SchemaTypeUnused',
-                        'SchemaUnionUnused',
-                    ])
                     ->setUsedDirectives([
                         '@schemaDirective',
                         '@codeDirective',
                         '@deprecated',
                         '@scalar',
                         '@mock',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@schemaDirectiveUnused',
                     ]),
                 (new TestSettings())
                     ->setPrintDirectiveDefinitions(false),
@@ -525,7 +440,7 @@ class SchemaPrinterTest extends TestCase {
             ],
             TestSettings::class.' (no normalization)'          => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-test-settings-no-normalization.graphql'),
+                    $this->getTestData()->file('~printSchema-TestSettings-NoNormalization.graphql'),
                 ))
                     ->setUsedTypes([
                         'Int',
@@ -550,27 +465,12 @@ class SchemaPrinterTest extends TestCase {
                         'CodeDirectiveScalarCustomClass',
                         'CodeInterface',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Float',
-                        'SchemaEnumUnused',
-                        'SchemaInputUnused',
-                        'SchemaInterfaceUnused',
-                        'SchemaScalarUnused',
-                        'SchemaTypeUnused',
-                        'SchemaUnionUnused',
-                    ])
                     ->setUsedDirectives([
                         '@schemaDirective',
                         '@codeDirective',
                         '@deprecated',
                         '@scalar',
                         '@mock',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@schemaDirectiveUnused',
                     ]),
                 (new TestSettings())
                     ->setNormalizeSchema(false)
@@ -588,7 +488,7 @@ class SchemaPrinterTest extends TestCase {
             ],
             TestSettings::class.' (DirectiveDefinitionFilter)' => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-test-settings-directive-definition-filter.graphql'),
+                    $this->getTestData()->file('~printSchema-TestSettings-DirectiveDefinitionFilter.graphql'),
                 ))
                     ->setUsedTypes([
                         'Query',
@@ -608,46 +508,25 @@ class SchemaPrinterTest extends TestCase {
                         'CodeType',
                         'CodeInterface',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Int',
-                        'Float',
-                        'CodeDirectiveEnum',
-                        'CodeDirectiveInput',
-                        'CodeDirectiveScalar',
-                        'CodeDirectiveScalarCustomClass',
-                        'SchemaEnumUnused',
-                        'SchemaInputUnused',
-                        'SchemaInterfaceUnused',
-                        'SchemaScalarUnused',
-                        'SchemaTypeUnused',
-                        'SchemaUnionUnused',
-                    ])
                     ->setUsedDirectives([
                         '@schemaDirective',
                         '@codeDirective',
                         '@deprecated',
                         '@scalar',
                         '@mock',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@schemaDirectiveUnused',
                     ]),
                 (new TestSettings())
                     ->setDirectiveDefinitionFilter(
-                        static function (GraphQLDirective|LighthouseDirective $directive, bool $isStandard): bool {
+                        static function (string $directive, bool $isStandard): bool {
                             return $isStandard === false
-                                && $directive instanceof GraphQLDirective
-                                && $directive->name !== 'codeDirective';
+                                && !in_array($directive, ['mock', 'scalar', 'codeDirective'], true);
                         },
                     ),
                 0,
             ],
             TestSettings::class.' (TypeDefinitionFilter)'      => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-test-settings-type-definition-filter.graphql'),
+                    $this->getTestData()->file('~printSchema-TestSettings-TypeDefinitionFilter.graphql'),
                 ))
                     ->setUsedTypes([
                         'Boolean',
@@ -671,41 +550,25 @@ class SchemaPrinterTest extends TestCase {
                         'String',
                         'CodeInterface',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Int',
-                        'Float',
-                        'SchemaEnumUnused',
-                        'SchemaInputUnused',
-                        'SchemaInterfaceUnused',
-                        'SchemaScalarUnused',
-                        'SchemaTypeUnused',
-                        'SchemaUnionUnused',
-                    ])
                     ->setUsedDirectives([
                         '@schemaDirective',
                         '@codeDirective',
                         '@deprecated',
                         '@scalar',
                         '@mock',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@schemaDirectiveUnused',
                     ]),
                 (new TestSettings())
                     ->setTypeDefinitionFilter(
-                        static function (Type $type, bool $isStandard): bool {
+                        static function (string $type, bool $isStandard): bool {
                             return $isStandard === false
-                                && !str_starts_with($type->name, 'Code');
+                                && !str_starts_with($type, 'Code');
                         },
                     ),
                 0,
             ],
             TestSettings::class.' (everything)'                => [
                 (new GraphQLExpectedSchema(
-                    $this->getTestData()->file('~printSchema-test-settings-everything.graphql'),
+                    $this->getTestData()->file('~printSchema-TestSettings-Everything.graphql'),
                 ))
                     ->setUsedTypes([
                         'Int',
@@ -730,27 +593,12 @@ class SchemaPrinterTest extends TestCase {
                         'CodeDirectiveScalarCustomClass',
                         'CodeInterface',
                     ])
-                    ->setUnusedTypes([
-                        'ID',
-                        'Float',
-                        'SchemaEnumUnused',
-                        'SchemaInputUnused',
-                        'SchemaInterfaceUnused',
-                        'SchemaScalarUnused',
-                        'SchemaTypeUnused',
-                        'SchemaUnionUnused',
-                    ])
                     ->setUsedDirectives([
                         '@schemaDirective',
                         '@codeDirective',
                         '@deprecated',
                         '@scalar',
                         '@mock',
-                    ])
-                    ->setUnusedDirectives([
-                        '@include',
-                        '@skip',
-                        '@schemaDirectiveUnused',
                     ]),
                 (new TestSettings())
                     ->setTypeDefinitionFilter(static fn (): bool => true)

@@ -1,6 +1,6 @@
 <?php declare(strict_types = 1);
 
-namespace LastDragon_ru\LaraASP\GraphQL\SchemaPrinter\Misc;
+namespace LastDragon_ru\LaraASP\GraphQL\Printer;
 
 use GraphQL\Language\AST\DirectiveDefinitionNode;
 use GraphQL\Language\AST\ScalarTypeDefinitionNode;
@@ -8,12 +8,14 @@ use GraphQL\Language\AST\TypeDefinitionNode;
 use GraphQL\Language\Parser;
 use GraphQL\Type\Definition\CustomScalarType;
 use GraphQL\Type\Definition\Directive as GraphQLDirective;
-use LastDragon_ru\LaraASP\GraphQL\SchemaPrinter\Exceptions\DirectiveDefinitionNotFound;
+use LastDragon_ru\LaraASP\GraphQLPrinter\Contracts\DirectiveResolver as DirectiveResolverContract;
 use Nuwave\Lighthouse\Schema\DirectiveLocator;
 use Nuwave\Lighthouse\Schema\ExecutableTypeNodeConverter;
 use Nuwave\Lighthouse\Schema\Factories\DirectiveFactory;
 use Nuwave\Lighthouse\Schema\TypeRegistry;
-use Nuwave\Lighthouse\Support\Contracts\Directive as LighthouseDirective;
+
+use function assert;
+use function is_string;
 
 /**
  * Class helps us to search defined directives and convert AST nodes into
@@ -29,38 +31,23 @@ use Nuwave\Lighthouse\Support\Contracts\Directive as LighthouseDirective;
  *
  * @internal
  */
-class DirectiveResolver {
+class DirectiveResolver implements DirectiveResolverContract {
     protected DirectiveFactory $factory;
-
-    /**
-     * @var array<string,LighthouseDirective>
-     */
-    protected array $instances;
 
     /**
      * @var array<string,GraphQLDirective>
      */
     protected array $definitions;
 
-    /**
-     * @param array<GraphQLDirective> $directives
-     */
     public function __construct(
         protected TypeRegistry $registry,
         protected DirectiveLocator $locator,
         protected ExecutableTypeNodeConverter $converter,
-        array $directives = [],
     ) {
-        $this->factory     = new DirectiveFactory($this->converter);
-        $this->instances   = [];
-        $this->definitions = [];
-
-        foreach ($directives as $directive) {
-            $this->definitions[$directive->name] = $directive;
-        }
+        $this->factory = new DirectiveFactory($this->converter);
     }
 
-    public function getDefinition(string $name): GraphQLDirective {
+    public function getDefinition(string $name): ?GraphQLDirective {
         $directive = $this->definitions[$name] ?? null;
 
         if (!$directive) {
@@ -69,17 +56,18 @@ class DirectiveResolver {
             // "DefinitionException : Lighthouse failed while trying to load
             // a type XXX" error)
             $node     = null;
-            $instance = $this->getInstance($name);
-            $document = $instance instanceof LighthouseDirective
-                ? Parser::parse($instance::definition())
-                : null;
+            $instance = $this->locator->resolve($name);
+            $document = Parser::parse($instance::definition());
 
-            foreach ($document?->definitions ?? [] as $definition) {
+            foreach ($document->definitions as $definition) {
                 if ($definition instanceof DirectiveDefinitionNode) {
                     $node = $definition;
                 } elseif ($definition instanceof TypeDefinitionNode) {
+                    // fixme(graphql-php): in v15 the `TypeDefinitionNode::getName()` should be used instead.
                     $name = $definition->name->value;
                     $type = null;
+
+                    assert(is_string($name));
 
                     if (!$this->registry->has($name)) {
                         if ($definition instanceof ScalarTypeDefinitionNode) {
@@ -114,20 +102,7 @@ class DirectiveResolver {
             if ($node) {
                 $directive                = $this->factory->handle($node);
                 $this->definitions[$name] = $directive;
-            } else {
-                throw new DirectiveDefinitionNotFound($name);
             }
-        }
-
-        return $directive;
-    }
-
-    public function getInstance(string $name): GraphQLDirective|LighthouseDirective {
-        $directive = $this->instances[$name] ?? $this->definitions[$name] ?? null;
-
-        if (!$directive) {
-            $directive              = $this->locator->create($name);
-            $this->instances[$name] = $directive;
         }
 
         return $directive;
@@ -137,16 +112,6 @@ class DirectiveResolver {
      * @return array<GraphQLDirective>
      */
     public function getDefinitions(): array {
-        $directives = $this->definitions;
-
-        foreach ($this->instances as $name => $instance) {
-            $directives[$name] ??= $this->getDefinition($name);
-        }
-
-        foreach (GraphQLDirective::getInternalDirectives() as $directive) {
-            $directives[$directive->name] ??= $directive;
-        }
-
-        return $directives;
+        return [];
     }
 }
